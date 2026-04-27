@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>持仓健康诊断 Demo</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --text: #1f2a37;
+        --muted: #6b7280;
+        --primary: #2f6bff;
+        --good: #18a957;
+        --warn: #f59e0b;
+        --risk: #ef4444;
+        --line: #e5e7eb;
+        --shadow: 0 6px 20px rgba(31, 42, 55, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .app {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px 16px 32px;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+
+      .title h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .title p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: #344054;
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .btn.active {
+        border-color: var(--primary);
+        background: rgba(47, 107, 255, 0.1);
+        color: var(--primary);
+        font-weight: 600;
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .top-grid {
+        grid-template-columns: 1.2fr 1fr;
+      }
+
+      .kpi-grid {
+        grid-template-columns: repeat(4, minmax(160px, 1fr));
+      }
+
+      .mid-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 14px;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .sub {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      .score {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 10px;
+      }
+
+      .score-value {
+        font-size: 42px;
+        line-height: 1;
+        font-weight: 700;
+      }
+
+      .badge {
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .badge.good { background: rgba(24, 169, 87, 0.12); color: var(--good); }
+      .badge.warn { background: rgba(245, 158, 11, 0.12); color: var(--warn); }
+      .badge.risk { background: rgba(239, 68, 68, 0.12); color: var(--risk); }
+
+      .risk-list {
+        margin: 12px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+      }
+
+      .risk-item {
+        border: 1px dashed var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        display: grid;
+        gap: 4px;
+      }
+
+      .risk-item .label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .risk-item .val {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .kpi {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+      }
+
+      .kpi .name {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .kpi .value {
+        font-weight: 700;
+        margin-top: 6px;
+      }
+
+      .canvas-wrap {
+        height: 240px;
+        margin-top: 10px;
+        position: relative;
+      }
+
+      canvas {
+        width: 100%;
+        height: 100%;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 13px;
+      }
+
+      .table th,
+      .table td {
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        padding: 10px 6px;
+      }
+
+      .table th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 12px;
+      }
+
+      .tone-good { color: var(--good); }
+      .tone-warn { color: var(--warn); }
+      .tone-risk { color: var(--risk); }
+
+      .footnote {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 900px) {
+        .top-grid,
+        .mid-grid,
+        .kpi-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .score-value {
+          font-size: 34px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="header">
+        <div class="title">
+          <h1>持仓健康诊断</h1>
+          <p>目标用户：新手 / 进阶用户 | 范围：站内多基金账户 | 更新频率：每日</p>
+        </div>
+        <div class="controls" id="rangeControls">
+          <button class="btn active" data-range="1M">近1月</button>
+          <button class="btn" data-range="3M">近3月</button>
+          <button class="btn" data-range="1Y">近1年</button>
+        </div>
+      </div>
+
+      <div class="grid top-grid">
+        <section class="card">
+          <h3>账户健康评分</h3>
+          <div class="sub">综合风险、分散度、风格偏离；不直接提供调仓指令</div>
+          <div class="score">
+            <div class="score-value" id="healthScore">78</div>
+            <div class="badge warn" id="healthLevel">亚健康</div>
+          </div>
+          <ul class="risk-list" id="riskList"></ul>
+        </section>
+
+        <section class="card">
+          <h3>核心指标看板</h3>
+          <div class="sub">优先指标：收益率、回撤、波动、夏普、分散度、重仓重复度、风格偏离</div>
+          <div class="grid kpi-grid" id="kpiGrid"></div>
+        </section>
+      </div>
+
+      <div class="grid mid-grid" style="margin-top: 12px;">
+        <section class="card">
+          <h3>收益与回撤趋势</h3>
+          <div class="sub">观察波动区间与回撤压力</div>
+          <div class="canvas-wrap">
+            <canvas id="trendCanvas"></canvas>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>资产分散度结构</h3>
+          <div class="sub">分散度越高，单一风格冲击越小</div>
+          <div class="canvas-wrap">
+            <canvas id="allocCanvas"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid mid-grid" style="margin-top: 12px;">
+        <section class="card">
+          <h3>风格偏离诊断</h3>
+          <div class="sub">当前组合风格与目标风格的偏离程度</div>
+          <table class="table" id="styleTable">
+            <thead>
+              <tr>
+                <th>风格维度</th>
+                <th>目标占比</th>
+                <th>当前占比</th>
+                <th>偏离</th>
+                <th>健康判定</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <section class="card">
+          <h3>重仓重复度诊断</h3>
+          <div class="sub">识别看似分散、实则同质暴露的重叠风险</div>
+          <table class="table" id="overlapTable">
+            <thead>
+              <tr>
+                <th>基金组合</th>
+                <th>重仓重合度</th>
+                <th>风险描述</th>
+                <th>优先级</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>诊断结论（解释型，不构成投资建议）</h3>
+        <div class="sub">提供健康解释和优化方向，不给出直接买卖指令</div>
+        <ul class="risk-list" id="adviceList"></ul>
+        <div class="footnote">
+          风险提示：市场有风险，基金投资需谨慎。诊断结果基于历史数据与规则模型，不代表未来收益。
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const dataByRange = {
+        "1M": {
+          score: 78,
+          level: "亚健康",
+          levelClass: "warn",
+          kpis: [
+            { name: "收益率", value: "+2.1%", tone: "good" },
+            { name: "最大回撤", value: "-6.8%", tone: "risk" },
+            { name: "年化波动", value: "13.5%", tone: "warn" },
+            { name: "夏普比率", value: "0.92", tone: "warn" },
+            { name: "分散度指数", value: "71/100", tone: "warn" },
+            { name: "重仓重复度", value: "39%", tone: "risk" },
+            { name: "风格偏离度", value: "27%", tone: "risk" }
+          ],
+          riskPoints: [
+            { label: "风险", value: "回撤高于同类中位（-6.8%）" },
+            { label: "分散度", value: "权益仓位集中于成长风格" },
+            { label: "风格偏离", value: "较目标偏离 27%，超预警阈值 20%" }
+          ],
+          trend: {
+            labels: ["1", "5", "10", "15", "20", "25", "30"],
+            pnl: [0.1, 0.7, -0.8, 1.2, 1.6, 2.4, 2.1],
+            drawdown: [-1.2, -2.8, -6.8, -4.1, -3.7, -3.2, -3.4]
+          },
+          alloc: [
+            { name: "股基", value: 42, color: "#2f6bff" },
+            { name: "债基", value: 22, color: "#18a957" },
+            { name: "QDII", value: 16, color: "#8b5cf6" },
+            { name: "现金类", value: 8, color: "#f59e0b" },
+            { name: "货基", value: 12, color: "#64748b" }
+          ],
+          styleRows: [
+            ["成长", "35%", "49%", "+14%", "偏离高"],
+            ["价值", "25%", "16%", "-9%", "偏离中"],
+            ["均衡", "40%", "35%", "-5%", "可接受"]
+          ],
+          overlapRows: [
+            ["A成长先锋 + B科技精选", "58%", "前十大持仓高度重合", "高"],
+            ["C全球机遇 + D海外龙头", "44%", "行业暴露重复", "中"],
+            ["E稳健债券 + F短债增强", "21%", "债券久期结构接近", "低"]
+          ],
+          advice: [
+            { label: "问题", value: "组合收益尚可，但回撤和风格集中导致抗风险能力不足。", cls: "tone-risk" },
+            { label: "解释", value: "当前权益端偏成长，市场调整时净值回撤放大。", cls: "tone-warn" },
+            { label: "方向", value: "建议先做结构体检：降低重仓重复、提升防御性资产占比。", cls: "tone-good" }
+          ]
+        },
+        "3M": {
+          score: 74,
+          level: "亚健康",
+          levelClass: "warn",
+          kpis: [
+            { name: "收益率", value: "+4.8%", tone: "good" },
+            { name: "最大回撤", value: "-9.2%", tone: "risk" },
+            { name: "年化波动", value: "15.2%", tone: "risk" },
+            { name: "夏普比率", value: "0.88", tone: "warn" },
+            { name: "分散度指数", value: "68/100", tone: "warn" },
+            { name: "重仓重复度", value: "43%", tone: "risk" },
+            { name: "风格偏离度", value: "31%", tone: "risk" }
+          ],
+          riskPoints: [
+            { label: "风险", value: "回撤扩大至 -9.2%，波动显著抬升" },
+            { label: "分散度", value: "海外与成长因子相关性上升" },
+            { label: "风格偏离", value: "偏离度 31%，超过阈值较多" }
+          ],
+          trend: {
+            labels: ["1", "15", "30", "45", "60", "75", "90"],
+            pnl: [0.2, 1.4, 0.3, 2.1, 3.2, 5.0, 4.8],
+            drawdown: [-2.1, -4.2, -7.3, -9.2, -6.0, -4.5, -4.7]
+          },
+          alloc: [
+            { name: "股基", value: 45, color: "#2f6bff" },
+            { name: "债基", value: 20, color: "#18a957" },
+            { name: "QDII", value: 18, color: "#8b5cf6" },
+            { name: "现金类", value: 6, color: "#f59e0b" },
+            { name: "货基", value: 11, color: "#64748b" }
+          ],
+          styleRows: [
+            ["成长", "35%", "52%", "+17%", "偏离高"],
+            ["价值", "25%", "14%", "-11%", "偏离高"],
+            ["均衡", "40%", "34%", "-6%", "可接受"]
+          ],
+          overlapRows: [
+            ["A成长先锋 + B科技精选", "61%", "赛道与重仓股高度同质", "高"],
+            ["C全球机遇 + D海外龙头", "47%", "区域和币种暴露叠加", "中"],
+            ["E稳健债券 + F短债增强", "23%", "风险可控", "低"]
+          ],
+          advice: [
+            { label: "问题", value: "3个月维度收益提升，但承担了更高波动与回撤。", cls: "tone-risk" },
+            { label: "解释", value: "风险收益比未同步改善，夏普偏弱。", cls: "tone-warn" },
+            { label: "方向", value: "优先解决风格偏离与重复暴露，再看收益优化。", cls: "tone-good" }
+          ]
+        },
+        "1Y": {
+          score: 81,
+          level: "基本健康",
+          levelClass: "good",
+          kpis: [
+            { name: "收益率", value: "+11.3%", tone: "good" },
+            { name: "最大回撤", value: "-12.7%", tone: "warn" },
+            { name: "年化波动", value: "12.1%", tone: "warn" },
+            { name: "夏普比率", value: "1.06", tone: "good" },
+            { name: "分散度指数", value: "76/100", tone: "good" },
+            { name: "重仓重复度", value: "32%", tone: "warn" },
+            { name: "风格偏离度", value: "18%", tone: "warn" }
+          ],
+          riskPoints: [
+            { label: "风险", value: "长期收益稳健，极端回撤仍需关注" },
+            { label: "分散度", value: "整体分散度改善，部分行业仍偏集中" },
+            { label: "风格偏离", value: "风格偏离降至预警线附近" }
+          ],
+          trend: {
+            labels: ["1", "60", "120", "180", "240", "300", "365"],
+            pnl: [-1.1, 2.4, 3.1, 6.8, 7.0, 10.8, 11.3],
+            drawdown: [-5.1, -12.7, -8.2, -6.4, -4.3, -3.9, -4.1]
+          },
+          alloc: [
+            { name: "股基", value: 39, color: "#2f6bff" },
+            { name: "债基", value: 26, color: "#18a957" },
+            { name: "QDII", value: 14, color: "#8b5cf6" },
+            { name: "现金类", value: 8, color: "#f59e0b" },
+            { name: "货基", value: 13, color: "#64748b" }
+          ],
+          styleRows: [
+            ["成长", "35%", "41%", "+6%", "可接受"],
+            ["价值", "25%", "21%", "-4%", "可接受"],
+            ["均衡", "40%", "38%", "-2%", "健康"]
+          ],
+          overlapRows: [
+            ["A成长先锋 + B科技精选", "45%", "重复度回落但仍偏高", "中"],
+            ["C全球机遇 + D海外龙头", "35%", "区域重复可接受", "低"],
+            ["E稳健债券 + F短债增强", "19%", "重叠低", "低"]
+          ],
+          advice: [
+            { label: "问题", value: "1年维度健康度较高，但极端行情下回撤防护仍有提升空间。", cls: "tone-warn" },
+            { label: "解释", value: "风格偏离已收敛，但权益集中度仍高于目标。", cls: "tone-warn" },
+            { label: "方向", value: "保持当前分散化趋势，继续压降重仓重叠。", cls: "tone-good" }
+          ]
+        }
+      };
+
+      const controls = document.getElementById("rangeControls");
+      const scoreEl = document.getElementById("healthScore");
+      const levelEl = document.getElementById("healthLevel");
+      const riskListEl = document.getElementById("riskList");
+      const kpiGridEl = document.getElementById("kpiGrid");
+      const styleBody = document.querySelector("#styleTable tbody");
+      const overlapBody = document.querySelector("#overlapTable tbody");
+      const adviceEl = document.getElementById("adviceList");
+
+      const trendCanvas = document.getElementById("trendCanvas");
+      const allocCanvas = document.getElementById("allocCanvas");
+
+      function toneClassFromName(name) {
+        if (name === "good") return "tone-good";
+        if (name === "warn") return "tone-warn";
+        return "tone-risk";
+      }
+
+      function render(range) {
+        const data = dataByRange[range];
+        if (!data) return;
+
+        scoreEl.textContent = data.score;
+        levelEl.textContent = data.level;
+        levelEl.className = "badge " + data.levelClass;
+
+        riskListEl.innerHTML = data.riskPoints
+          .map((r) => `<li class="risk-item"><span class="label">${r.label}</span><span class="val">${r.value}</span></li>`)
+          .join("");
+
+        kpiGridEl.innerHTML = data.kpis
+          .map((k) => `<div class="kpi"><div class="name">${k.name}</div><div class="value ${toneClassFromName(k.tone)}">${k.value}</div></div>`)
+          .join("");
+
+        styleBody.innerHTML = data.styleRows
+          .map((row) => {
+            const cls = row[4].includes("高") ? "tone-risk" : row[4].includes("中") ? "tone-warn" : "tone-good";
+            return `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td class="${cls}">${row[4]}</td></tr>`;
+          })
+          .join("");
+
+        overlapBody.innerHTML = data.overlapRows
+          .map((row) => {
+            const cls = row[3] === "高" ? "tone-risk" : row[3] === "中" ? "tone-warn" : "tone-good";
+            return `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${cls}">${row[3]}</td></tr>`;
+          })
+          .join("");
+
+        adviceEl.innerHTML = data.advice
+          .map((a) => `<li class="risk-item"><span class="label">${a.label}</span><span class="val ${a.cls}">${a.value}</span></li>`)
+          .join("");
+
+        drawTrend(trendCanvas, data.trend);
+        drawAlloc(allocCanvas, data.alloc);
+      }
+
+      function setupHiDpi(canvas) {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * ratio;
+        canvas.height = rect.height * ratio;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        return { ctx, width: rect.width, height: rect.height };
+      }
+
+      function drawAxes(ctx, width, height, left, right, top, bottom) {
+        ctx.strokeStyle = "#d1d5db";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(left, height - bottom);
+        ctx.lineTo(width - right, height - bottom);
+        ctx.stroke();
+      }
+
+      function drawLine(ctx, points, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        points.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.stroke();
+      }
+
+      function drawTrend(canvas, trend) {
+        const { ctx, width, height } = setupHiDpi(canvas);
+        ctx.clearRect(0, 0, width, height);
+        const pad = { left: 34, right: 10, top: 12, bottom: 24 };
+        drawAxes(ctx, width, height, pad.left, pad.right, pad.top, pad.bottom);
+
+        const allVals = [...trend.pnl, ...trend.drawdown];
+        const max = Math.max(...allVals) + 1;
+        const min = Math.min(...allVals) - 1;
+        const span = max - min || 1;
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+
+        function toPoint(i, val) {
+          return {
+            x: pad.left + (i / (trend.labels.length - 1)) * plotW,
+            y: pad.top + ((max - val) / span) * plotH
+          };
+        }
+
+        const pnlPoints = trend.pnl.map((v, i) => toPoint(i, v));
+        const ddPoints = trend.drawdown.map((v, i) => toPoint(i, v));
+        drawLine(ctx, pnlPoints, "#2f6bff");
+        drawLine(ctx, ddPoints, "#ef4444");
+
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "11px sans-serif";
+        trend.labels.forEach((lab, i) => {
+          if (i % 2 === 0 || i === trend.labels.length - 1) {
+            const p = toPoint(i, min);
+            ctx.fillText(lab, p.x - 8, height - 8);
+          }
+        });
+
+        ctx.fillStyle = "#2f6bff";
+        ctx.fillRect(width - 128, 10, 10, 10);
+        ctx.fillStyle = "#374151";
+        ctx.fillText("收益率(%)", width - 112, 19);
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(width - 58, 10, 10, 10);
+        ctx.fillStyle = "#374151";
+        ctx.fillText("回撤(%)", width - 42, 19);
+      }
+
+      function drawAlloc(canvas, alloc) {
+        const { ctx, width, height } = setupHiDpi(canvas);
+        ctx.clearRect(0, 0, width, height);
+
+        const cx = width * 0.35;
+        const cy = height * 0.52;
+        const radius = Math.min(width, height) * 0.28;
+        const total = alloc.reduce((s, i) => s + i.value, 0) || 1;
+
+        let start = -Math.PI / 2;
+        alloc.forEach((item) => {
+          const angle = (item.value / total) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, radius, start, start + angle);
+          ctx.closePath();
+          ctx.fillStyle = item.color;
+          ctx.fill();
+          start += angle;
+        });
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.56, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText("分散结构", cx - 28, cy - 2);
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = "#6b7280";
+        ctx.fillText("按基金类型", cx - 28, cy + 16);
+
+        const lx = width * 0.68;
+        let ly = 30;
+        alloc.forEach((item) => {
+          ctx.fillStyle = item.color;
+          ctx.fillRect(lx, ly, 10, 10);
+          ctx.fillStyle = "#374151";
+          ctx.font = "12px sans-serif";
+          ctx.fillText(`${item.name} ${item.value}%`, lx + 16, ly + 10);
+          ly += 22;
+        });
+      }
+
+      controls.addEventListener("click", (e) => {
+        const target = e.target.closest("button[data-range]");
+        if (!target) return;
+        const range = target.dataset.range;
+        controls.querySelectorAll(".btn").forEach((b) => b.classList.remove("active"));
+        target.classList.add("active");
+        render(range);
+      });
+
+      window.addEventListener("resize", () => {
+        const active = controls.querySelector(".btn.active");
+        render(active ? active.dataset.range : "1M");
+      });
+
+      render("1M");
+    </script>
+  </body>
+</html>
+
